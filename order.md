@@ -23,11 +23,11 @@
 
 ### 3.1 必須機能
 
-1. **都市名検索：** テキスト入力欄に都市名を入力し、検索ボタンを押すと天気情報を取得する
-2. **天気情報表示：** 天気（晴れ、曇りなど）、気温、天気アイコンを画面に表示する
-3. **エラー表示：** 存在しない都市名を入力した場合、「都市が見つかりません」などのエラーメッセージを表示する
-4. **検索履歴保存：** 検索した都市名を localStorage に保存し、画面に履歴として表示する
-5. **履歴から再検索：** 履歴に表示された都市名をクリックすると、その都市の天気を再検索する
+1. **地域選択：** プルダウンから地域を選択し、検索ボタンを押すと天気情報を取得する
+2. **天気情報表示：** 天気（晴れ、曇りなど）、気温、降水確率、天気アイコンを画面に表示する
+3. **エラー表示：** API通信に失敗した場合、エラーメッセージを表示する
+4. **検索履歴保存：** 検索した地域を localStorage に保存し、画面に履歴として表示する
+5. **履歴から再検索：** 履歴に表示された地域をクリックすると、その地域の天気を再検索する
 
 ### 3.2 任意機能（余裕があれば）
 
@@ -37,14 +37,69 @@
 
 ## 4. 使用するAPI
 
-**OpenWeather API**（無料プラン）を使用します。
+**天気予報 API（livedoor 天気互換）** を使用します。
 
-- **公式サイト：** https://openweathermap.org/api
-- **必要な作業：** アカウント作成 → APIキーを取得
-- **エンドポイント例：**
+- **公式サイト：** https://weather.tsukumijima.net/
+- **必要な作業：** なし（APIキー不要）
+- **エンドポイント：**
 ```
-https://api.openweathermap.org/data/2.5/weather?q={都市名}&appid={APIキー}&units=metric&lang=ja
+https://weather.tsukumijima.net/api/forecast/city/{地域コード}
 ```
+- **リクエスト例（東京）：**
+```
+https://weather.tsukumijima.net/api/forecast/city/130010
+```
+
+### 4.1 主な地域コード
+
+| 地域 | コード |
+|------|--------|
+| 東京 | 130010 |
+| 大阪 | 270000 |
+| 名古屋 | 230010 |
+| 福岡 | 400010 |
+| 札幌 | 016010 |
+| 仙台 | 040010 |
+| 広島 | 340010 |
+| 那覇 | 471010 |
+
+※ 全地域コードは https://weather.tsukumijima.net/primary_area.xml で確認できます
+
+### 4.2 レスポンス例
+
+```json
+{
+  "publicTime": "2024-01-15T17:00:00+09:00",
+  "publishingOffice": "気象庁",
+  "title": "東京都 東京 の天気",
+  "forecasts": [
+    {
+      "date": "2024-01-15",
+      "dateLabel": "今日",
+      "telop": "晴れ",
+      "image": {
+        "url": "https://www.jma.go.jp/bosai/forecast/img/100.svg",
+        "title": "晴れ"
+      },
+      "temperature": {
+        "min": { "celsius": "2" },
+        "max": { "celsius": "10" }
+      },
+      "chanceOfRain": {
+        "T00_06": "0%",
+        "T06_12": "0%",
+        "T12_18": "10%",
+        "T18_24": "0%"
+      }
+    }
+  ]
+}
+```
+
+### 4.3 API利用時の注意
+
+- **連続アクセスは0.5秒以上の間隔を空けること**（学習用途では問題ない）
+- データは気象庁から取得しているが、正確性は保証されない
 
 ## 5. ファイル構成
 
@@ -74,8 +129,8 @@ weather-app/
 
 API通信を担当。fetch と async/await を使った非同期処理を実装する。
 
-- `getWeather(cityName)` 関数を export する
-- fetch で OpenWeather API を呼び出す
+- `getWeather(cityCode)` 関数を export する
+- fetch で天気予報APIを呼び出す
 - エラー時は例外を throw する
 
 #### ui.js
@@ -90,7 +145,7 @@ API通信を担当。fetch と async/await を使った非同期処理を実装�
 
 データ永続化を担当。localStorage の読み書きを行う。
 
-- `saveCity(cityName)` - 都市名を履歴に追加
+- `saveCity(cityCode, cityName)` - 地域コードと地域名を履歴に追加
 - `getHistory()` - 保存された履歴を取得
 - `JSON.stringify` / `JSON.parse` を使う
 
@@ -100,7 +155,8 @@ API通信を担当。fetch と async/await を使った非同期処理を実装�
 
 以下のパターンを覚えておくと便利です：
 ```javascript
-async function getWeather(city) {
+async function getWeather(cityCode) {
+  const url = `https://weather.tsukumijima.net/api/forecast/city/${cityCode}`;
   const response = await fetch(url);
   const data = await response.json();
   return data;
@@ -124,11 +180,25 @@ try {
 fetch は 404 エラーでも reject しません。`response.ok` を確認する必要があります：
 ```javascript
 if (!response.ok) {
-  throw new Error('都市が見つかりません');
+  throw new Error('天気情報の取得に失敗しました');
 }
 ```
 
-### 6.4 ES Modules の使い方
+### 6.4 レスポンスデータの取り出し方
+
+天気予報APIのレスポンスから必要なデータを取り出す例：
+```javascript
+const data = await getWeather('130010');
+
+// 今日の天気
+const today = data.forecasts[0];
+console.log(today.telop);        // "晴れ"
+console.log(today.image.url);    // 天気アイコンのURL
+console.log(today.temperature.max?.celsius); // 最高気温（nullの場合あり）
+console.log(today.chanceOfRain.T12_18);      // 12-18時の降水確率
+```
+
+### 6.5 ES Modules の使い方
 
 HTMLで `type="module"` を指定し、import/export を使います：
 ```html
@@ -137,13 +207,13 @@ HTMLで `type="module"` を指定し、import/export を使います：
 ```
 ```javascript
 // api.js
-export async function getWeather(city) { ... }
+export async function getWeather(cityCode) { ... }
 
 // main.js
 import { getWeather } from './api.js';
 ```
 
-### 6.5 preventDefault の使い方
+### 6.6 preventDefault の使い方
 
 フォーム送信時にページリロードを防ぐために使います：
 ```javascript
@@ -153,7 +223,7 @@ form.addEventListener('submit', async (event) => {
 });
 ```
 
-### 6.6 localStorage の使い方
+### 6.7 localStorage の使い方
 
 配列を保存する場合は JSON に変換します：
 ```javascript
@@ -171,7 +241,7 @@ const history = JSON.parse(localStorage.getItem('history')) || [];
 | 1日目 | HTMLとCSSでUIを作成（検索フォーム、結果表示エリア、履歴エリア） |
 | 2日目 | api.js を作成。fetch + async/await で API を叩き、console.log で確認 |
 | 3日目 | ui.js を作成。取得したデータを画面に表示する |
-| 4日目 | try/catch でエラーハンドリングを追加。存在しない都市でテスト |
+| 4日目 | try/catch でエラーハンドリングを追加。エラー時の動作をテスト |
 | 5日目 | storage.js を作成。localStorage で検索履歴を保存・表示 |
 | 6日目 | 履歴クリックで再検索機能を実装。全体の動作確認 |
 | 7日目 | コードを整理して上司にレビューしてもらう |
@@ -179,7 +249,7 @@ const history = JSON.parse(localStorage.getItem('history')) || [];
 ## 8. 参考リンク
 
 - **fetch/async/await 解説：** https://ja.javascript.info/async-await
-- **OpenWeather API ドキュメント：** https://openweathermap.org/current
+- **天気予報API ドキュメント：** https://weather.tsukumijima.net/
 - **MDN - Fetch API：** https://developer.mozilla.org/ja/docs/Web/API/Fetch_API
 - **MDN - localStorage：** https://developer.mozilla.org/ja/docs/Web/API/Window/localStorage
 
