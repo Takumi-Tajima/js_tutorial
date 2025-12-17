@@ -6,7 +6,18 @@ export function setupWeatherForm() {
 
   fetch(apiUrl)
     .then((response) => response.json())
-    .then((data) => { console.log(data);}
+    .then((data) => {
+      const resultContent = document.getElementById('result-content');
+      resultContent.innerHTML = '';
+      const weatherDiv = document.createElement('div');
+      weatherDiv.innerHTML = `
+        <h2>天気予報: ${data.location.city} (${data.location.prefecture})</h2>
+        <p>今日の天気: ${data.forecasts[0].telop}</p>
+        <p>明日の天気: ${data.forecasts[1].telop}</p>
+        <p>明後日の天気: ${data.forecasts[2].telop}</p>
+      `;
+      resultContent.appendChild(weatherDiv);
+    }
   );
   });
 }
