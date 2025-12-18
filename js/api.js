@@ -1,6 +1,11 @@
 export const fetchWeatherDate = (cityCode) => {
   const apiUrl = `https://weather.tsukumijima.net/api/forecast/city/${cityCode}`;
-  return fetch(apiUrl).then((response) => response.json()).then((data) => data);
+  return fetch(apiUrl).then((response) => {
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return response.json();
+  }).then((data) => data);
 }
 
 // export function setupWeatherForm() {
